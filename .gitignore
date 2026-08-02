@@ -1,0 +1,15 @@
+# Node.js
+node_modules/
+npm-debug.log*
+
+# 個人情報（アクセストークン・パスワード・データベース・同期設定）
+config/
+sync-jobs/
+
+# ログ
+*.log
+cron.log
+
+# システム
+.DS_Store
+*.swp
