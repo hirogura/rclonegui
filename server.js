@@ -119,7 +119,7 @@ app.get('/api/sync-settings', (req, res) => {
   }
 });
 
-const CRON_MARKER = '# rsyncgui-schedule';
+const CRON_MARKER = '# rclonegui-schedule';
 const CRON_SCRIPT = path.join(__dirname, 'cron-sync.sh');
 
 function writeCronScript(pairs) {
@@ -180,7 +180,7 @@ app.post('/api/sync-settings', (req, res) => {
     // Write sync script
     writeCronScript(settings.pairs || []);
 
-    // Update cron - remove ALL old rsyncgui entries
+    // Update cron - remove ALL old rclonegui entries
     let cronLines = [];
     try {
       const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', timeout: 5000 });
@@ -195,7 +195,7 @@ app.post('/api/sync-settings', (req, res) => {
     }
 
     const newCron = cronLines.join('\n') + '\n';
-    const tmpFile = '/tmp/rsyncgui_cron_tmp';
+    const tmpFile = '/tmp/rclonegui_cron_tmp';
     fs.writeFileSync(tmpFile, newCron);
     execSync(`crontab ${tmpFile}`, { timeout: 5000 });
     fs.unlinkSync(tmpFile);
@@ -225,7 +225,7 @@ app.get('/api/cron-info', (req, res) => {
     } catch { output += '(rclone関連のcronエントリなし)\n'; }
 
     // Check scheduled sync settings
-    output += '\n=== rsyncGUI スケジュール設定 ===\n';
+    output += '\n=== rcloneGUI スケジュール設定 ===\n';
     try {
       if (fs.existsSync(SYNC_SETTINGS_PATH)) {
         const settings = JSON.parse(fs.readFileSync(SYNC_SETTINGS_PATH, 'utf-8'));
@@ -568,6 +568,6 @@ app.get('*', (req, res) => {
 });
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n  🚀 rsyncGUI 起動`);
+  console.log(`\n  🚀 rcloneGUI 起動`);
   console.log(`  📡 http://localhost:${PORT}\n`);
 });

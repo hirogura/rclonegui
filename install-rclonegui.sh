@@ -1,18 +1,18 @@
 #!/bin/bash
 # =====================================================
-#  rsyncGUI インストーラー
+#  rcloneGUI インストーラー
 #  ソース: https://github.com/hirogura/rclonegui
 # =====================================================
 set -e
 
 INSTALL_DIR="/opt/rclonegui"
 REPO_URL="https://github.com/hirogura/rclonegui.git"
-SERVICE_NAME="rsyncgui"
+SERVICE_NAME="rclonegui"
 unset PORT
-APP_PORT="${RSYNCGUI_PORT:-3348}"
+APP_PORT="${RCLONEGUI_PORT:-3348}"
 
 echo "========================================="
-echo "  rsyncGUI Installer"
+echo "  rcloneGUI Installer"
 echo "========================================="
 echo ""
 
@@ -114,7 +114,7 @@ else
   if [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
     # 旧インストール（config/sync-jobs）があれば退避
     if [ -d "$INSTALL_DIR/config" ] || [ -d "$INSTALL_DIR/sync-jobs" ]; then
-      BK="/tmp/rsyncgui-backup-$(date +%Y%m%d%H%M%S)"
+      BK="/tmp/rclonegui-backup-$(date +%Y%m%d%H%M%S)"
       mkdir -p "$BK"
       echo "  既存データをバックアップ: $BK"
       [ -d "$INSTALL_DIR/config" ] && mv "$INSTALL_DIR/config" "$BK/"
@@ -150,14 +150,14 @@ fi
 
 if ss -tlnp 2>/dev/null | grep -q ":${APP_PORT} " && ! pgrep -f "node server.js" >/dev/null 2>&1; then
   echo "エラー: ポート${APP_PORT}は既に使用されています"
-  echo "  別のポートを指定してください:  RSYNCGUI_PORT=3349 bash $0"
+  echo "  別のポートを指定してください:  RCLONEGUI_PORT=3349 bash $0"
   exit 1
 fi
 
 echo "systemd サービス作成..."
 cat > /etc/systemd/system/${SERVICE_NAME}.service << SVCEOF
 [Unit]
-Description=rsyncGUI Web GUI
+Description=rcloneGUI Web GUI
 After=network.target
 
 [Service]

@@ -1,4 +1,4 @@
-# rsyncGUI
+# rcloneGUI
 
 rclone を利用したクラウド同期 Web GUI です。
 Google ドライブ / OneDrive の同期・スケジュール実行・ジョブ履歴をブラウザから操作できます。
@@ -31,14 +31,14 @@ sudo bash install-rclonegui.sh
 4. rclone のインストール（未導入時のみ）
 5. GitHub から最新版を `/opt/rclonegui` に取得
 6. npm 依存パッケージのインストール
-7. systemd サービス（`rsyncgui`）の作成・起動
+7. systemd サービス（`rclonegui`）の作成・起動
 
 ### ポート番号の変更
 
 デフォルトは `3348` です。変更する場合はインストール時に指定します。
 
 ```bash
-RSYNCGUI_PORT=3349 sudo bash install-rclonegui.sh
+RCLONEGUI_PORT=3349 sudo bash install-rclonegui.sh
 ```
 
 ### アップデート
@@ -46,7 +46,7 @@ RSYNCGUI_PORT=3349 sudo bash install-rclonegui.sh
 ```bash
 cd /opt/rclonegui
 git pull
-sudo systemctl restart rsyncgui
+sudo systemctl restart rclonegui
 ```
 
 または、インストールスクリプトをもう一度実行するだけでも更新されます
@@ -55,17 +55,17 @@ sudo systemctl restart rsyncgui
 ## 使い方
 
 - Web UI: `http://<サーバーIP>:3348`
-- サービス操作: `systemctl [start|stop|restart|status] rsyncgui`
+- サービス操作: `systemctl [start|stop|restart|status] rclonegui`
 - 設定ファイル: `/opt/rclonegui/config/rclone.conf`
-- ログ確認: `journalctl -u rsyncgui -f`
+- ログ確認: `journalctl -u rclonegui -f`
 
 ## アンインストール
 
 ```bash
 # 1. サービス停止・削除
-sudo systemctl stop rsyncgui
-sudo systemctl disable rsyncgui
-sudo rm -f /etc/systemd/system/rsyncgui.service
+sudo systemctl stop rclonegui
+sudo systemctl disable rclonegui
+sudo rm -f /etc/systemd/system/rclonegui.service
 sudo systemctl daemon-reload
 
 # 2. スケジュール（cron）から同期設定を削除

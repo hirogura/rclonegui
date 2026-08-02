@@ -7,7 +7,7 @@ let authRemoteName = '';
 let authSessionId = '';
 let authPollTimer = null;
 let addingPairFor = '';
-let dismissedErrors = new Set(JSON.parse(localStorage.getItem('rsyncgui_dismissed') || '[]'));
+let dismissedErrors = new Set(JSON.parse(localStorage.getItem('rclonegui_dismissed') || '[]'));
 
 const ICONS = {
   plus: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>',
@@ -83,7 +83,7 @@ function esc(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
 function dismissError(source, dest) {
   dismissedErrors.add(`${source}→${dest}`);
-  localStorage.setItem('rsyncgui_dismissed', JSON.stringify([...dismissedErrors]));
+  localStorage.setItem('rclonegui_dismissed', JSON.stringify([...dismissedErrors]));
   showPage('jobs');
 }
 
@@ -424,7 +424,7 @@ function exportSettings() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `rsyncgui-settings-${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `rclonegui-settings-${new Date().toISOString().slice(0,10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
   showToast('設定をエクスポートしました', 'success');
