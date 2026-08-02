@@ -6,6 +6,9 @@ Google ドライブ / OneDrive の同期・スケジュール実行・ジョブ�
 - リポジトリ: https://github.com/hirogura/rclonegui
 - 動作環境: Ubuntu / Debian (Linux), systemd
 
+![ロゴ画像](rclonegui-ph.png)
+
+
 ## インストール
 
 ### 方法1: ダウンロードして実行
@@ -85,3 +88,7 @@ sudo apt-get autoremove -y
   GitHub には公開されず、`.gitignore` で除外されています。
 - バックアップは `/opt/rclonegui/config/rclone.conf` を保存しておけば
   アカウント認証をやり直さずに復元できます。
+
+## ライセンス
+
+このプロジェクトは [MIT License](LICENSE) の下で公開されています。
