@@ -155,6 +155,12 @@ if ss -tlnp 2>/dev/null | grep -q ":${APP_PORT} " && ! pgrep -f "node server.js"
 fi
 
 echo "systemd サービス作成..."
+# Tailscale Serve が TLS 終端用に <Tailscale IP>:PORT をバインドできるよう、
+# Tailscale 接続環境ではアプリを 127.0.0.1 のみで待機させる
+HOST_ENV=""
+if [ -n "$TS_IP" ]; then
+  HOST_ENV="Environment=HOST=127.0.0.1"
+fi
 cat > /etc/systemd/system/${SERVICE_NAME}.service << SVCEOF
 [Unit]
 Description=rcloneGUI Web GUI
@@ -168,6 +174,7 @@ Restart=always
 RestartSec=3
 Environment=PORT=$APP_PORT
 Environment=TZ=Asia/Tokyo
+${HOST_ENV}
 
 [Install]
 WantedBy=multi-user.target
@@ -176,13 +183,40 @@ SVCEOF
 systemctl daemon-reload
 systemctl enable ${SERVICE_NAME}
 systemctl restart ${SERVICE_NAME}
+sleep 1
+if ! systemctl is-active --quiet ${SERVICE_NAME}; then
+  echo "エラー: サービス起動に失敗しました"
+  systemctl status ${SERVICE_NAME} --no-pager
+  exit 1
+fi
 echo "  サービス起動完了"
+
+# ── Tailscale Serve で HTTPS 公開（冪等）──
+SERVE_URL=""
+if [ -n "$TS_IP" ] && command -v tailscale &>/dev/null; then
+  echo ""
+  echo "[Tailscale] Serve (HTTPS) を設定..."
+  tailscale serve --https=${APP_PORT} off >/dev/null 2>&1 || true
+  if tailscale serve --bg --https=${APP_PORT} "http://127.0.0.1:${APP_PORT}" >/dev/null 2>&1; then
+    for i in $(seq 1 12); do
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "https://${TS_HOSTNAME}:${APP_PORT}/" 2>/dev/null || echo "000")
+      [ "${HTTP_CODE}" != "000" ] && break
+      sleep 5
+    done
+    SERVE_URL="https://${TS_HOSTNAME}:${APP_PORT}"
+  else
+    echo "  [WARN] tailscale serve の設定に失敗しました（HTTP のみで動作します）"
+  fi
+fi
 echo ""
 
 echo "========================================="
 echo "  インストール完了！"
 echo "========================================="
 echo ""
+if [ -n "$SERVE_URL" ]; then
+  echo "  Web UI : $SERVE_URL  (Tailscale Serve / HTTPS)"
+fi
 if [ -n "$TS_IP" ]; then
   echo "  Web UI : http://${TS_IP}:${APP_PORT}"
 fi

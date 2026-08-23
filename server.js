@@ -2,12 +2,18 @@ const express = require('express');
 const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3348;
 const RCLONE_CONFIG_DIR = path.join(__dirname, 'config');
 const SYNC_JOBS_DIR = path.join(__dirname, 'sync-jobs');
 const CONFIG_PATH = path.join(RCLONE_CONFIG_DIR, 'rclone.conf');
+
+const APP_VERSION = '1.0.0';
+const SERVICE_NAME = process.env.RCLONEGUI_SERVICE || 'rclonegui';
+const GITHUB_RAW = 'https://raw.githubusercontent.com/hirogura/rclonegui/main/';
+const UPDATE_FILES = ['server.js', 'public/index.html', 'public/js/app.js', 'public/css/style.css'];
 
 if (!fs.existsSync(RCLONE_CONFIG_DIR)) fs.mkdirSync(RCLONE_CONFIG_DIR, { recursive: true });
 if (!fs.existsSync(SYNC_JOBS_DIR)) fs.mkdirSync(SYNC_JOBS_DIR, { recursive: true });
@@ -60,6 +66,72 @@ function rclone(args) {
     return { ok: false, error: (e.stderr || e.message).trim() };
   }
 }
+
+// === Admin: version / update / restart ===
+app.get('/api/version', (req, res) => {
+  res.json({ version: APP_VERSION });
+});
+
+function fetchRaw(rel) {
+  return new Promise((resolve, reject) => {
+    https.get(GITHUB_RAW + rel, { headers: { 'User-Agent': 'rclonegui-updater' } }, r => {
+      if (r.statusCode !== 200) return reject(new Error(`HTTP ${r.statusCode}: ${rel}`));
+      let body = '';
+      r.on('data', d => { body += d; });
+      r.on('end', () => resolve(body));
+    }).on('error', reject);
+  });
+}
+
+function restartService() {
+  setTimeout(() => {
+    spawn('systemctl', ['restart', SERVICE_NAME], { stdio: 'ignore', detached: true }).unref();
+  }, 800);
+}
+
+app.post('/api/admin/restart', (req, res) => {
+  restartService();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/update', async (req, res) => {
+  try {
+    const fetched = {};
+    for (const rel of UPDATE_FILES) fetched[rel] = await fetchRaw(rel);
+    if (!fetched['server.js'].includes("require('express')") || !fetched['public/index.html'].includes('</html>')) {
+      return res.status(500).json({ ok: false, error: 'ダウンロードしたファイルが不正です' });
+    }
+
+    let changed = false;
+    for (const rel of UPDATE_FILES) {
+      let cur = '';
+      try { cur = fs.readFileSync(path.join(__dirname, rel), 'utf-8'); } catch {}
+      if (cur !== fetched[rel]) changed = true;
+    }
+    if (!changed) return res.json({ ok: true, updated: false });
+
+    // server.js を構文チェックしてから置換
+    const tmpSrv = path.join(__dirname, 'server.js.new');
+    fs.writeFileSync(tmpSrv, fetched['server.js']);
+    try {
+      execSync('node --check server.js.new', { cwd: __dirname, timeout: 10000 });
+    } catch (e) {
+      try { fs.unlinkSync(tmpSrv); } catch {}
+      return res.status(500).json({ ok: false, error: 'ダウンロードしたserver.jsの構文チェックに失敗しました' });
+    }
+    fs.renameSync(tmpSrv, path.join(__dirname, 'server.js'));
+    for (const rel of UPDATE_FILES) {
+      if (rel === 'server.js') continue;
+      const tmp = path.join(__dirname, rel + '.new');
+      fs.writeFileSync(tmp, fetched[rel]);
+      fs.renameSync(tmp, path.join(__dirname, rel));
+    }
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+  restartService();
+  res.json({ ok: true, updated: true });
+});
 
 // === Config API ===
 app.get('/api/remotes', (req, res) => {
@@ -567,7 +639,8 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
+const HOST = process.env.HOST || '0.0.0.0';
+const server = app.listen(PORT, HOST, () => {
   console.log(`\n  🚀 rcloneGUI 起動`);
-  console.log(`  📡 http://localhost:${PORT}\n`);
+  console.log(`  📡 http://${HOST}:${PORT}\n`);
 });

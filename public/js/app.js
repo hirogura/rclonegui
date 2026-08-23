@@ -499,4 +499,53 @@ async function loadJobs() {
   if (data.jobs.some(j => j.status === 'running')) setTimeout(loadJobs, 2000);
 }
 
-document.addEventListener('DOMContentLoaded', () => loadAll());
+async function loadVersion() {
+  try {
+    const res = await fetch('/api/version');
+    const v = await res.json();
+    document.getElementById('app-version').textContent = 'v.' + v.version;
+  } catch (e) {}
+}
+
+async function waitForServer(maxMs = 60000) {
+  const deadline = Date.now() + maxMs;
+  await new Promise(r => setTimeout(r, 2000));
+  while (Date.now() < deadline) {
+    try { const res = await fetch('/api/version', { cache: 'no-store' }); if (res.ok) return true; } catch (e) {}
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  return false;
+}
+
+async function adminUpdate() {
+  if (!confirm('GitHubから最新版を取得してアップデートしますか？\n完了後、サービスは自動で再起動されます。')) return;
+  const b = document.getElementById('btn-update');
+  b.disabled = true;
+  try {
+    const res = await fetch('/api/admin/update', { method: 'POST' });
+    const d = await res.json();
+    if (!res.ok || !d.ok) { alert('アップデートに失敗しました\n' + (d.error || '')); b.disabled = false; return; }
+    if (!d.updated) { alert('すでに最新版です'); b.disabled = false; return; }
+    b.textContent = '再起動中…';
+  } catch (e) {
+    alert('アップデートに失敗しました');
+    b.disabled = false;
+    return;
+  }
+  await waitForServer(120000);
+  location.reload();
+}
+
+async function adminRestart() {
+  if (!confirm('rcloneGUIサービスを再起動しますか？')) return;
+  const b = document.getElementById('btn-restart');
+  b.disabled = true;
+  try { await fetch('/api/admin/restart', { method: 'POST' }); } catch (e) {}
+  await waitForServer();
+  location.reload();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadAll();
+  loadVersion();
+});
