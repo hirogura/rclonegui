@@ -3,6 +3,7 @@ const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const vm = require('vm');
 
 const app = express();
 const PORT = process.env.PORT || 3348;
@@ -76,9 +77,9 @@ function fetchRaw(rel) {
   return new Promise((resolve, reject) => {
     https.get(GITHUB_RAW + rel, { headers: { 'User-Agent': 'rclonegui-updater' } }, r => {
       if (r.statusCode !== 200) return reject(new Error(`HTTP ${r.statusCode}: ${rel}`));
-      let body = '';
-      r.on('data', d => { body += d; });
-      r.on('end', () => resolve(body));
+      const chunks = [];
+      r.on('data', d => chunks.push(d));
+      r.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
     }).on('error', reject);
   });
 }
@@ -111,14 +112,15 @@ app.post('/api/admin/update', async (req, res) => {
     if (!changed) return res.json({ ok: true, updated: false });
 
     // server.js を構文チェックしてから置換
+    // 注: `node --check` は拡張子 .new を解釈できず ERR_UNKNOWN_FILE_EXTENSION で
+    // 必ず失敗するため、vm.Script でメモリ上にコンパイルして検証する
+    try {
+      new vm.Script(fetched['server.js'], { filename: 'server.js' });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: 'ダウンロードしたserver.jsの構文チェックに失敗しました\n' + e.message });
+    }
     const tmpSrv = path.join(__dirname, 'server.js.new');
     fs.writeFileSync(tmpSrv, fetched['server.js']);
-    try {
-      execSync('node --check server.js.new', { cwd: __dirname, timeout: 10000 });
-    } catch (e) {
-      try { fs.unlinkSync(tmpSrv); } catch {}
-      return res.status(500).json({ ok: false, error: 'ダウンロードしたserver.jsの構文チェックに失敗しました' });
-    }
     fs.renameSync(tmpSrv, path.join(__dirname, 'server.js'));
     for (const rel of UPDATE_FILES) {
       if (rel === 'server.js') continue;
