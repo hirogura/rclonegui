@@ -7,6 +7,7 @@ let authRemoteName = '';
 let authSessionId = '';
 let authPollTimer = null;
 let addingPairFor = '';
+let editingPairIdx = -1;
 let dismissedErrors = new Set(JSON.parse(localStorage.getItem('rclonegui_dismissed') || '[]'));
 
 const ICONS = {
@@ -76,15 +77,30 @@ function showPage(name) {
 
 function closeModal() {
   document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open'));
+  if (authPollTimer) { clearInterval(authPollTimer); authPollTimer = null; }
+  authSessionId = '';
 }
 function closeModalBg(e) { if (e.target === e.currentTarget) closeModal(); }
 
-function esc(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+// HTML表示用エスケープ（XSS対策）。onclick等のJS文字列には決して生のユーザー入力を埋め込まないこと。
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-function dismissError(source, dest) {
-  dismissedErrors.add(`${source}→${dest}`);
+// リモート名はサーバー側で英数字のみに制限されているが、念のためJS文字列用にも無害化する
+function escJs(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' '); }
+
+function dismissError(idx) {
+  const p = syncPairs[idx];
+  if (!p) return;
+  dismissedErrors.add(`${p.source}→${p.dest}`);
   localStorage.setItem('rclonegui_dismissed', JSON.stringify([...dismissedErrors]));
-  showPage('jobs');
+  renderAll();
 }
 
 function renderAll() {
@@ -122,11 +138,11 @@ function renderAll() {
         </div>
         <div class="remote-card-actions">
           <button class="btn btn-outline btn-sm" onclick="setupSsh()">${icon('terminal')} 一時SSH</button>
-          <button class="btn btn-pastel btn-sm" onclick="startAuthFlow('${esc(r.name)}','${r.type}')">${icon('key')} 認証</button>
-          <button class="btn btn-outline btn-sm" onclick="testRemote('${esc(r.name)}')">${icon('link')} テスト</button>
+          <button class="btn btn-pastel btn-sm" onclick="startAuthFlow('${escJs(r.name)}','${escJs(r.type)}')">${icon('key')} 認証</button>
+          <button class="btn btn-outline btn-sm" onclick="testRemote('${escJs(r.name)}')">${icon('link')} テスト</button>
           <button class="btn btn-outline btn-sm" onclick="teardownSsh()">${icon('trash')} SSH削除</button>
-          <button class="btn btn-pastel-green btn-sm" onclick="openAddPair('${esc(r.name)}','${r.type}')">${icon('plus')} 同期ペア追加</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteRemote('${esc(r.name)}')">${icon('trash')} 削除</button>
+          <button class="btn btn-pastel-green btn-sm" onclick="openAddPair('${escJs(r.name)}','${escJs(r.type)}')">${icon('plus')} 同期ペア追加</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRemote('${escJs(r.name)}')">${icon('trash')} 削除</button>
         </div>
       </div>`;
 
@@ -139,7 +155,7 @@ function renderAll() {
         const pairJobs = jobHistory.filter(j => j.source === p.source && j.dest === p.dest);
         const errorKey = `${p.source}→${p.dest}`;
         const hasError = pairJobs.some(j => j.status === 'failed') && !dismissedErrors.has(errorKey);
-        const errorLink = hasError ? `<span class="sync-error-link" onclick="dismissError('${esc(p.source)}','${esc(p.dest)}')">同期エラーあり</span>` : '';
+        const errorLink = hasError ? `<span class="sync-error-link" onclick="dismissError(${pi})">同期エラーあり</span>` : '';
         html += `
         <div class="sync-pair-row">
           <div class="sync-pair-left">
@@ -307,6 +323,7 @@ function copySshCmd() {
 // === Sync Pairs ===
 function openAddPair(remoteName, remoteType) {
   addingPairFor = remoteName;
+  editingPairIdx = -1;
   const prefix = `${remoteName}:`;
   document.getElementById('pair-prefix').textContent = prefix;
   document.getElementById('pair-source').value = '';
@@ -331,7 +348,12 @@ async function saveSyncPair() {
     showToast('同期ペアを追加しました', 'success');
   }
   editingPairIdx = -1;
-  await saveSettings();
+  try {
+    await saveSettings();
+  } catch (e) {
+    showToast('保存に失敗: ' + e.message, 'error');
+    return;
+  }
   closeModal();
   loadAll();
 }
@@ -360,8 +382,6 @@ async function syncPairNow(idx) {
   } catch (e) { showToast('失敗: ' + e.message, 'error'); }
 }
 
-let editingPairIdx = -1;
-
 function editPair(idx) {
   editingPairIdx = idx;
   const p = syncPairs[idx];
@@ -379,7 +399,9 @@ function editPair(idx) {
 }
 
 async function saveSettings() {
-  await api('/api/sync-settings', { method: 'POST', body: { pairs: syncPairs, schedule: syncSchedule } });
+  const d = await api('/api/sync-settings', { method: 'POST', body: { pairs: syncPairs, schedule: syncSchedule } });
+  if (!d || d.ok === false) throw new Error((d && d.error) || '保存に失敗しました');
+  return d;
 }
 
 // === Schedule ===
@@ -414,8 +436,12 @@ function addSyncSchedule() {
 }
 
 async function saveSchedule() {
-  await api('/api/sync-settings', { method: 'POST', body: { pairs: syncPairs, schedule: syncSchedule } });
-  showToast('スケジュールを保存しました', 'success');
+  try {
+    await saveSettings();
+    showToast('スケジュールを保存しました', 'success');
+  } catch (e) {
+    showToast('保存に失敗: ' + e.message, 'error');
+  }
 }
 
 function exportSettings() {

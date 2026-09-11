@@ -1,6 +1,6 @@
 {
   "name": "rclonegui",
-  "version": "10.0.0",
+  "version": "1.0.1",
   "description": "rcloneGUI - Cloud Sync Web GUI",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
